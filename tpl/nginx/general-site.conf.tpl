@@ -2,7 +2,7 @@ server {
     listen 80;
     listen 443 ssl;
     server_name {domain_name} *.{domain_name};
-    root "{root_folder}www/{folder_name}";
+    root "{root_folder}www/{folder_name}/";
 
 	error_log {root_folder}logs/nginx/error-{domain_name}.log;
 	access_log {root_folder}logs/nginx/access-{domain_name}.log;
