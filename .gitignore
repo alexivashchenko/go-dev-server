@@ -1,0 +1,16 @@
+.history
+apps/mysql/*
+apps/nginx/*
+apps/php/*
+data/*
+etc/nginx/sites-enabled/*
+etc/php/*
+etc/ssl/*
+logs/*
+tmp/*
+www/*
+!www/index.php
+hosts.tmp
+src/.env
+.env
+server.exe
