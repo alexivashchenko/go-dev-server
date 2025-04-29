@@ -32,8 +32,6 @@ func Start() {
 	// fmt.Println("wwwDir:", wwwDir)
 	// fmt.Println("sslDir:", sslDir)
 
-	fmt.Println("Create config file...")
-
 	err := helpers.CopyFile(openSslConfigTemplateFile, openSslConfigFile)
 	if err != nil {
 		fmt.Printf("Error: %v\n", err)
@@ -41,8 +39,9 @@ func Start() {
 	}
 
 	dnsLines := []string{
-		"DNS.1 = localhost",
-		"DNS.2 = *." + nginxDomainTail,
+		"IP.1 = 127.0.0.1",
+		"DNS.2 = localhost",
+		// TODO: Add current machine local IP
 	}
 
 	dirs, err := helpers.ListDirectories(wwwDir)
@@ -62,6 +61,12 @@ func Start() {
 		dnsIndex++
 	}
 
+	dnsLines = append(dnsLines, fmt.Sprintf("DNS.%v = *.localhost", dnsIndex)) // DNS.N = *.localhost
+	dnsIndex++
+
+	dnsLines = append(dnsLines, fmt.Sprintf("DNS.%v = *.%s", dnsIndex, nginxDomainTail)) // DNS.N = *.oo
+	dnsIndex++
+
 	// for _, dnsLine := range dnsLines {
 	// 	fmt.Println("dnsLine:", dnsLine)
 	// }
@@ -72,6 +77,7 @@ func Start() {
 		os.Exit(0)
 	}
 
+	// TODO: Create/Update Certificate only if domains was changed
 	createCertificate(privateKeyFile, csrFile, openSslConfigFile, certificateFile)
 
 	deleteWindowsCertificate()
