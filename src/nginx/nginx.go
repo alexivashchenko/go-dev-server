@@ -2,319 +2,436 @@ package nginx
 
 import (
 	"fmt"
+	"log"
 	"os"
+	"path/filepath"
+	"runtime"
 	"strings"
+	"time"
 
 	"github.com/alexivashchenko/go-dev-server/helpers"
 )
 
-func Stop() {
-	// fmt.Println("NGINX stopping...")
-
-	err := helpers.KillProcess("nginx.exe")
-	if err != nil {
-		fmt.Printf("Error: %v\n", err)
-		os.Exit(0)
-	}
-
-	// fmt.Println("NGINX stopped.")
+// Configuration holds all Nginx-related settings
+type Configuration struct {
+	RootDir             string
+	AppFolder           string
+	AppPath             string
+	DomainTail          string
+	EtcFolder           string
+	SitesEnabledFolder  string
+	HostsFilePath       string
+	TmpHostsFilePath    string
+	HostsFileIdentifier string
+	WWWDir              string
+	TemplatesDir        string
+	LogsDir             string
+	ExecutableName      string
+	DefaultConfTemplate string
+	NginxConfTemplate   string
+	GeneralSiteTemplate string
 }
 
-func Restart() {
-	Stop()
-	Start()
-}
-
-func Start() {
-	// fmt.Println("NGINX starting...")
-
+// NewConfiguration creates a new Nginx configuration
+func NewConfiguration() (*Configuration, error) {
 	rootDir := helpers.GetRootDirectory()
-	dirSeparator := string(os.PathSeparator)
 
-	nginxAppFolder := rootDir + dirSeparator + "apps" + dirSeparator + "nginx" + dirSeparator + os.Getenv("NGINX_APP_FOLDER")
-	// nginxAppConfigFolder := nginxAppFolder + dirSeparator + "conf"
+	// Get Nginx app folder from environment
+	nginxAppFolder := os.Getenv("NGINX_APP_FOLDER")
+	if nginxAppFolder == "" {
+		return nil, fmt.Errorf("nginx_app_folder environment variable is not set")
+	}
+
+	// Get Nginx domain tail from environment
 	nginxDomainTail := os.Getenv("NGINX_DOMAIN_TAIL")
-	nginxEtcFolder := rootDir + dirSeparator + "etc" + dirSeparator + "nginx"
-	nginxSitesEnabledFolder := nginxEtcFolder + dirSeparator + "sites-enabled"
-
-	hostsFileIdentifier := "#local server setting"
-	hostsFilePath := "C:" + dirSeparator + "Windows" + dirSeparator + "System32" + dirSeparator + "drivers" + dirSeparator + "etc" + dirSeparator + "hosts"
-	tmpHostsFilePath := rootDir + dirSeparator + "hosts.tmp"
-	wwwDir := rootDir + dirSeparator + "www"
-	templatesDir := rootDir + dirSeparator + "tpl"
-	generalSiteConfTemplateFile := templatesDir + dirSeparator + "nginx" + dirSeparator + "general-site.conf.tpl"
-
-	// fmt.Println("rootDir:", rootDir)
-	// fmt.Println("nginxAppFolder:", nginxAppFolder)
-	// fmt.Println("nginxDomainTail:", nginxDomainTail)
-	// fmt.Println("nginxAppConfigFolder:", nginxAppConfigFolder)
-	// fmt.Println("nginxEtcFolder:", nginxEtcFolder)
-	// fmt.Println("nginxSitesEnabledFolder:", nginxSitesEnabledFolder)
-	// fmt.Println("hostsFileIdentifier:", hostsFileIdentifier)
-	// fmt.Println("hostsFilePath:", hostsFilePath)
-	// fmt.Println("tmpHostsFilePath:", tmpHostsFilePath)
-	// fmt.Println("wwwDir:", wwwDir)
-
-	buildHostsFile(
-		hostsFilePath,
-		tmpHostsFilePath,
-		hostsFileIdentifier,
-		nginxDomainTail,
-		wwwDir,
-	)
-
-	copyNginxConfFile(
-		nginxAppFolder,
-		nginxDomainTail,
-		wwwDir,
-		templatesDir,
-		dirSeparator,
-		rootDir,
-	)
-
-	copyDefaultConfFile(
-		nginxSitesEnabledFolder,
-		templatesDir,
-		dirSeparator,
-		rootDir,
-	)
-
-	nginxLogsFilesDirectory := rootDir + dirSeparator + "logs" + dirSeparator + "nginx"
-	err := helpers.RemoveDirectoryAndContents(nginxLogsFilesDirectory)
-	if err != nil {
-		fmt.Printf("Error: %v\n", err)
-	}
-	helpers.CreateDirectoryIfNotExists(nginxLogsFilesDirectory)
-
-	dirs, err := helpers.ListDirectories(wwwDir)
-	if err != nil {
-		fmt.Printf("Error: %v\n", err)
-		os.Exit(0)
+	if nginxDomainTail == "" {
+		return nil, fmt.Errorf("nginx_domain_tail environment variable is not set")
 	}
 
-	for _, dir := range dirs {
-		createFilesForEachSite(
-			dir,
-			nginxDomainTail,
-			nginxSitesEnabledFolder,
-			dirSeparator,
-			generalSiteConfTemplateFile,
-			rootDir,
-			wwwDir,
-		)
+	// Determine executable name based on OS
+	executableName := "nginx"
+	hostsFilePath := "/etc/hosts"
+
+	if runtime.GOOS == "windows" {
+		executableName = "nginx.exe"
+		hostsFilePath = filepath.Join("C:\\", "Windows", "System32", "drivers", "etc", "hosts")
+	} else if runtime.GOOS == "darwin" {
+		hostsFilePath = "/private/etc/hosts"
 	}
 
-	createNginxErrorLogFile(
-		rootDir,
-		dirSeparator,
-	)
-
-	checkNginxConfiguration(
-		nginxAppFolder,
-		dirSeparator,
-	)
-
-	runNginx(
-		nginxAppFolder,
-		dirSeparator,
-	)
-
-	// fmt.Println("NGINX started.")
-
-}
-
-func runNginx(
-	nginxAppFolder string,
-	dirSeparator string,
-) {
-	err := helpers.RunCommand(nginxAppFolder+dirSeparator+"nginx.exe -p "+nginxAppFolder+dirSeparator, true)
-	if err != nil {
-		fmt.Printf("Error: %v\n", err)
-		os.Exit(0)
-	}
-}
-
-func checkNginxConfiguration(
-	nginxAppFolder string,
-	dirSeparator string,
-) {
-	err := helpers.RunCommand(nginxAppFolder+dirSeparator+"nginx.exe -p "+nginxAppFolder+dirSeparator+" -t", true)
-	if err != nil {
-		fmt.Printf("Error: %v\n", err)
-		os.Exit(0)
-	}
-}
-
-func createNginxErrorLogFile(
-	rootDir string,
-	dirSeparator string,
-) {
-	nginxErrorLogFile := rootDir + dirSeparator + "logs" + dirSeparator + "nginx" + dirSeparator + "error.log"
-	err := helpers.RemoveOldFileAndCreateNew(nginxErrorLogFile)
-	if err != nil {
-		fmt.Printf("Error: %v\n", err)
-		os.Exit(0)
-	}
-}
-
-func createFilesForEachSite(
-	dir string,
-	nginxDomainTail string,
-	nginxSitesEnabledFolder string,
-	dirSeparator string,
-	generalSiteConfTemplateFile string,
-	rootDir string,
-	wwwDir string,
-) {
-
-	domainName := dir + "." + nginxDomainTail
-	siteConfFile := nginxSitesEnabledFolder + dirSeparator + domainName + ".conf"
-
-	err := helpers.CopyFile(generalSiteConfTemplateFile, siteConfFile)
-	if err != nil {
-		fmt.Printf("Error: %v\n", err)
-		os.Exit(0)
+	// Create configuration
+	config := &Configuration{
+		RootDir:             rootDir,
+		AppFolder:           nginxAppFolder,
+		DomainTail:          nginxDomainTail,
+		HostsFilePath:       hostsFilePath,
+		HostsFileIdentifier: "#local server setting",
+		ExecutableName:      executableName,
 	}
 
-	err = helpers.ReplaceInFile(siteConfFile, "{root_folder}", helpers.ReplaceBackslashToSlash(rootDir+dirSeparator))
-	if err != nil {
-		fmt.Printf("Error: %v\n", err)
-		os.Exit(0)
+	// Set paths
+	config.AppPath = filepath.Join(rootDir, "apps", "nginx", nginxAppFolder)
+	config.EtcFolder = filepath.Join(rootDir, "etc", "nginx")
+	config.SitesEnabledFolder = filepath.Join(config.EtcFolder, "sites-enabled")
+	config.TmpHostsFilePath = filepath.Join(rootDir, "hosts.tmp")
+	config.WWWDir = filepath.Join(rootDir, "www")
+	config.TemplatesDir = filepath.Join(rootDir, "tpl")
+	config.LogsDir = filepath.Join(rootDir, "logs", "nginx")
+
+	// Template files
+	config.DefaultConfTemplate = filepath.Join(config.TemplatesDir, "nginx", "00-default.conf.tpl")
+	config.NginxConfTemplate = filepath.Join(config.TemplatesDir, "nginx", "nginx.conf.tpl")
+	config.GeneralSiteTemplate = filepath.Join(config.TemplatesDir, "nginx", "general-site.conf.tpl")
+
+	// Validate template files exist
+	templates := []string{
+		config.DefaultConfTemplate,
+		config.NginxConfTemplate,
+		config.GeneralSiteTemplate,
 	}
 
-	err = helpers.ReplaceInFile(siteConfFile, "{folder_name}", dir)
-	if err != nil {
-		fmt.Printf("Error: %v\n", err)
-		os.Exit(0)
-	}
-
-	err = helpers.ReplaceInFile(siteConfFile, "{domain_name}", domainName)
-	if err != nil {
-		fmt.Printf("Error: %v\n", err)
-		os.Exit(0)
-	}
-
-	siteErrorLogFile := rootDir + dirSeparator + "logs" + dirSeparator + "nginx" + dirSeparator + "error-" + domainName + ".log"
-	err = helpers.RemoveOldFileAndCreateNew(siteErrorLogFile)
-	if err != nil {
-		fmt.Printf("Error: %v\n", err)
-		os.Exit(0)
-	}
-
-	siteAccessLogFile := rootDir + dirSeparator + "logs" + dirSeparator + "nginx" + dirSeparator + "access-" + domainName + ".log"
-	err = helpers.RemoveOldFileAndCreateNew(siteAccessLogFile)
-	if err != nil {
-		fmt.Printf("Error: %v\n", err)
-		os.Exit(0)
-	}
-}
-
-func copyDefaultConfFile(
-	nginxSitesEnabledFolder string,
-	templatesDir string,
-	dirSeparator string,
-	rootDir string,
-) {
-	err := helpers.RemoveDirectoryAndContents(nginxSitesEnabledFolder)
-	if err != nil {
-		fmt.Printf("Error: %v\n", err)
-	}
-	helpers.CreateDirectoryIfNotExists(nginxSitesEnabledFolder)
-
-	defaultConfTemplateFile := templatesDir + dirSeparator + "nginx" + dirSeparator + "00-default.conf.tpl"
-	defaultConfFile := nginxSitesEnabledFolder + dirSeparator + "00-default.conf"
-	err = helpers.CopyFile(defaultConfTemplateFile, defaultConfFile)
-	if err != nil {
-		fmt.Printf("Error: %v\n", err)
-		os.Exit(0)
-	}
-	// sed -i "s/{root_folder}/$root_folder/g" "$nginx_app_folder_path/conf/nginx.conf"
-	err = helpers.ReplaceInFile(defaultConfFile, "{root_folder}", helpers.ReplaceBackslashToSlash(rootDir+dirSeparator))
-	if err != nil {
-		fmt.Printf("Error: %v\n", err)
-		os.Exit(0)
-	}
-}
-
-func copyNginxConfFile(
-	nginxAppFolder string,
-	nginxDomainTail string,
-	wwwDir string,
-	templatesDir string,
-	dirSeparator string,
-	rootDir string,
-) {
-	nginxConfTemplateFile := templatesDir + dirSeparator + "nginx" + dirSeparator + "nginx.conf.tpl"
-	nginxConfFile := nginxAppFolder + dirSeparator + "conf" + dirSeparator + "nginx.conf"
-	// cp "${PWD}/lib/nginx.conf.example" "$nginx_app_folder_path/conf/nginx.conf"
-	err := helpers.CopyFile(nginxConfTemplateFile, nginxConfFile)
-	if err != nil {
-		fmt.Printf("Error: %v\n", err)
-		os.Exit(0)
-	}
-	// sed -i "s/{root_folder}/$root_folder/g" "$nginx_app_folder_path/conf/nginx.conf"
-	err = helpers.ReplaceInFile(nginxConfFile, "{root_folder}", helpers.ReplaceBackslashToSlash(rootDir+dirSeparator))
-	if err != nil {
-		fmt.Printf("Error: %v\n", err)
-		os.Exit(0)
-	}
-}
-
-func buildHostsFile(
-	hostsFilePath string,
-	tmpHostsFilePath string,
-	hostsFileIdentifier string,
-	nginxDomainTail string,
-	wwwDir string,
-) {
-
-	helpers.RemoveFile(tmpHostsFilePath)
-
-	err := helpers.CreateFile(tmpHostsFilePath)
-	if err != nil {
-		fmt.Printf("Error: %v\n", err)
-		os.Exit(0)
-	}
-	// defer helpers.RemoveFile(tmpHostsFilePath) // Cannot delete at the script end since it's brake copying to C:\Windows\System32\drivers\etc\hosts
-
-	lines, err := helpers.ReadLinesIntoSlice(hostsFilePath)
-	if err != nil {
-		fmt.Printf("Error: %v\n", err)
-	}
-
-	newLines := []string{}
-
-	for _, line := range lines {
-		if !strings.Contains(line, hostsFileIdentifier) {
-			newLines = append(newLines, line)
-			continue
+	for _, template := range templates {
+		if _, err := os.Stat(template); os.IsNotExist(err) {
+			return nil, fmt.Errorf("template file not found: %s", template)
 		}
 	}
 
-	dirs, err := helpers.ListDirectories(wwwDir)
+	return config, nil
+}
+
+// Start initializes and starts the Nginx service
+func Start() error {
+	log.Println("Starting Nginx service...")
+	startTime := time.Now()
+
+	// Initialize configuration
+	config, err := NewConfiguration()
 	if err != nil {
-		fmt.Printf("Error: %v\n", err)
-		os.Exit(0)
+		return fmt.Errorf("failed to initialize nginx configuration: %w", err)
+	}
+
+	// Create required directories
+	if err := ensureDirectoriesExist(config); err != nil {
+		return fmt.Errorf("failed to create required directories: %w", err)
+	}
+
+	// Update hosts file
+	if err := updateHostsFile(config); err != nil {
+		return fmt.Errorf("failed to update hosts file: %w", err)
+	}
+
+	// Configure Nginx
+	if err := configureNginx(config); err != nil {
+		return fmt.Errorf("failed to configure nginx: %w", err)
+	}
+
+	// Create site configurations
+	if err := createSiteConfigurations(config); err != nil {
+		return fmt.Errorf("failed to create site configurations: %w", err)
+	}
+
+	// Create log files
+	if err := createLogFiles(config); err != nil {
+		return fmt.Errorf("failed to create log files: %w", err)
+	}
+
+	// Check Nginx configuration
+	if err := checkNginxConfiguration(config); err != nil {
+		return fmt.Errorf("nginx configuration check failed: %w", err)
+	}
+
+	// Start Nginx
+	if err := startNginx(config); err != nil {
+		return fmt.Errorf("failed to start nginx: %w", err)
+	}
+
+	elapsed := time.Since(startTime)
+	log.Printf("Nginx service started successfully in %.2f seconds", elapsed.Seconds())
+	return nil
+}
+
+// Stop stops the Nginx service
+func Stop() error {
+	log.Println("Stopping Nginx service...")
+	startTime := time.Now()
+
+	config, err := NewConfiguration()
+	if err != nil {
+		return fmt.Errorf("failed to initialize nginx configuration: %w", err)
+	}
+
+	// Kill Nginx process
+	if err := helpers.KillProcess(config.ExecutableName); err != nil {
+		return fmt.Errorf("failed to stop nginx process: %w", err)
+	}
+
+	elapsed := time.Since(startTime)
+	log.Printf("Nginx service stopped successfully in %.2f seconds", elapsed.Seconds())
+	return nil
+}
+
+// Restart restarts the Nginx service
+func Restart() error {
+	log.Println("Restarting Nginx service...")
+
+	if err := Stop(); err != nil {
+		log.Printf("Warning: Error stopping Nginx service: %v", err)
+		// Continue with start even if stop failed
+	}
+
+	// Small delay to ensure process has fully terminated
+	time.Sleep(500 * time.Millisecond)
+
+	if err := Start(); err != nil {
+		return fmt.Errorf("failed to restart nginx service: %w", err)
+	}
+
+	return nil
+}
+
+// GetStatus returns the current status of the Nginx service
+func GetStatus() string {
+	config, err := NewConfiguration()
+	if err != nil {
+		return "Error: " + err.Error()
+	}
+
+	running, pid := helpers.IsProcessRunning(config.ExecutableName)
+	if running {
+		return fmt.Sprintf("Running (PID: %d)", pid)
+	}
+	return "Stopped"
+}
+
+// ensureDirectoriesExist creates necessary directories
+func ensureDirectoriesExist(config *Configuration) error {
+	directories := []string{
+		config.EtcFolder,
+		config.SitesEnabledFolder,
+		config.LogsDir,
+	}
+
+	for _, dir := range directories {
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			return fmt.Errorf("failed to create directory %s: %w", dir, err)
+		}
+	}
+
+	return nil
+}
+
+// updateHostsFile updates the hosts file with site entries
+func updateHostsFile(config *Configuration) error {
+	log.Println("Updating hosts file...")
+
+	// Remove temporary hosts file if it exists
+	if err := helpers.RemoveFile(config.TmpHostsFilePath); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("failed to remove temporary hosts file: %w", err)
+	}
+
+	// Create new temporary hosts file
+	if err := helpers.CreateFile(config.TmpHostsFilePath); err != nil {
+		return fmt.Errorf("failed to create temporary hosts file: %w", err)
+	}
+
+	// Read current hosts file
+	lines, err := helpers.ReadLinesIntoSlice(config.HostsFilePath)
+	if err != nil {
+		return fmt.Errorf("failed to read hosts file: %w", err)
+	}
+
+	// Filter out existing server entries
+	newLines := []string{}
+	for _, line := range lines {
+		if !strings.Contains(line, config.HostsFileIdentifier) {
+			newLines = append(newLines, line)
+		}
+	}
+
+	// Get website directories
+	dirs, err := helpers.ListDirectories(config.WWWDir)
+	if err != nil {
+		return fmt.Errorf("failed to list website directories: %w", err)
+	}
+
+	// Add new entries for each website
+	for _, dir := range dirs {
+		baseName := filepath.Base(dir)
+		hostEntry := fmt.Sprintf("127.0.0.1\t%s\t%s",
+			baseName+"."+config.DomainTail,
+			config.HostsFileIdentifier)
+		newLines = append(newLines, hostEntry)
+	}
+
+	// Write to temporary file
+	if err := helpers.AppendLines(config.TmpHostsFilePath, newLines); err != nil {
+		return fmt.Errorf("failed to write to temporary hosts file: %w", err)
+	}
+
+	// Copy to actual hosts file with admin privileges
+	if err := helpers.CopyFileAsAdmin(config.TmpHostsFilePath, config.HostsFilePath); err != nil {
+		return fmt.Errorf("failed to update hosts file: %w", err)
+	}
+
+	return nil
+}
+
+// configureNginx configures the Nginx server
+func configureNginx(config *Configuration) error {
+	log.Println("Configuring Nginx...")
+
+	// Copy and configure main nginx.conf
+	nginxConfFile := filepath.Join(config.AppPath, "conf", "nginx.conf")
+
+	if err := helpers.CopyFile(config.NginxConfTemplate, nginxConfFile); err != nil {
+		return fmt.Errorf("failed to copy nginx configuration template: %w", err)
+	}
+
+	// Replace placeholders in nginx.conf
+	rootDirFormatted := helpers.ReplaceBackslashToSlash(config.RootDir + string(os.PathSeparator))
+	if err := helpers.ReplaceInFile(nginxConfFile, "{root_folder}", rootDirFormatted); err != nil {
+		return fmt.Errorf("failed to update nginx configuration: %w", err)
+	}
+
+	// Clean and recreate sites-enabled directory
+	if err := helpers.RemoveDirectoryAndContents(config.SitesEnabledFolder); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("failed to clean sites-enabled directory: %w", err)
+	}
+
+	if err := os.MkdirAll(config.SitesEnabledFolder, 0755); err != nil {
+		return fmt.Errorf("failed to create sites-enabled directory: %w", err)
+	}
+
+	// Copy and configure default site
+	defaultConfFile := filepath.Join(config.SitesEnabledFolder, "00-default.conf")
+
+	if err := helpers.CopyFile(config.DefaultConfTemplate, defaultConfFile); err != nil {
+		return fmt.Errorf("failed to copy default site template: %w", err)
+	}
+
+	if err := helpers.ReplaceInFile(defaultConfFile, "{root_folder}", rootDirFormatted); err != nil {
+		return fmt.Errorf("failed to update default site configuration: %w", err)
+	}
+
+	return nil
+}
+
+// createSiteConfigurations creates configuration files for each site
+func createSiteConfigurations(config *Configuration) error {
+	log.Println("Creating site configurations...")
+
+	// Get website directories
+	dirs, err := helpers.ListDirectories(config.WWWDir)
+	if err != nil {
+		return fmt.Errorf("failed to list website directories: %w", err)
+	}
+
+	// Create configuration for each site
+	for _, dir := range dirs {
+		baseName := filepath.Base(dir)
+		domainName := baseName + "." + config.DomainTail
+		siteConfFile := filepath.Join(config.SitesEnabledFolder, domainName+".conf")
+
+		// Copy site template
+		if err := helpers.CopyFile(config.GeneralSiteTemplate, siteConfFile); err != nil {
+			return fmt.Errorf("failed to copy site template for %s: %w", domainName, err)
+		}
+
+		// Replace placeholders
+		replacements := map[string]string{
+			"{root_folder}": helpers.ReplaceBackslashToSlash(config.RootDir + string(os.PathSeparator)),
+			"{folder_name}": baseName,
+			"{domain_name}": domainName,
+		}
+
+		for placeholder, value := range replacements {
+			if err := helpers.ReplaceInFile(siteConfFile, placeholder, value); err != nil {
+				return fmt.Errorf("failed to update site configuration for %s: %w", domainName, err)
+			}
+		}
+	}
+
+	return nil
+}
+
+// createLogFiles creates log files for Nginx and each site
+func createLogFiles(config *Configuration) error {
+	log.Println("Creating log files...")
+
+	// Clean and recreate logs directory
+	if err := helpers.RemoveDirectoryAndContents(config.LogsDir); err != nil && !os.IsNotExist(err) {
+		log.Printf("Warning: Failed to clean logs directory: %v", err)
+	}
+
+	if err := os.MkdirAll(config.LogsDir, 0755); err != nil {
+		return fmt.Errorf("failed to create logs directory: %w", err)
+	}
+
+	// Create main error log
+	mainErrorLog := filepath.Join(config.LogsDir, "error.log")
+	if err := helpers.RemoveOldFileAndCreateNew(mainErrorLog); err != nil {
+		return fmt.Errorf("failed to create main error log: %w", err)
+	}
+
+	// Create logs for each site
+	dirs, err := helpers.ListDirectories(config.WWWDir)
+	if err != nil {
+		return fmt.Errorf("failed to list website directories: %w", err)
 	}
 
 	for _, dir := range dirs {
-		const hostFormat = "127.0.0.1\t%s\t%s"
-		newLines = append(newLines, fmt.Sprintf(hostFormat, dir+"."+nginxDomainTail, hostsFileIdentifier))
+		baseName := filepath.Base(dir)
+		domainName := baseName + "." + config.DomainTail
+
+		// Create error log
+		siteErrorLog := filepath.Join(config.LogsDir, "error-"+domainName+".log")
+		if err := helpers.RemoveOldFileAndCreateNew(siteErrorLog); err != nil {
+			return fmt.Errorf("failed to create error log for %s: %w", domainName, err)
+		}
+
+		// Create access log
+		siteAccessLog := filepath.Join(config.LogsDir, "access-"+domainName+".log")
+		if err := helpers.RemoveOldFileAndCreateNew(siteAccessLog); err != nil {
+			return fmt.Errorf("failed to create access log for %s: %w", domainName, err)
+		}
 	}
 
-	// for _, line := range newLines {
-	// 	fmt.Println(line)
-	// }
+	return nil
+}
 
-	err = helpers.AppendLines(tmpHostsFilePath, newLines)
-	if err != nil {
-		fmt.Printf("Error: %v\n", err)
-		os.Exit(0)
+// checkNginxConfiguration checks if the Nginx configuration is valid
+func checkNginxConfiguration(config *Configuration) error {
+	log.Println("Checking Nginx configuration...")
+
+	command := fmt.Sprintf("%s -p %s -t",
+		filepath.Join(config.AppPath, config.ExecutableName),
+		config.AppPath)
+
+	if err := helpers.RunCommand(command, true); err != nil {
+		return fmt.Errorf("nginx configuration test failed: %w", err)
 	}
 
-	err = helpers.CopyFileAsAdmin(tmpHostsFilePath, hostsFilePath)
-	if err != nil {
-		fmt.Printf("Error: %v\n", err)
-		os.Exit(0)
+	return nil
+}
+
+// startNginx starts the Nginx server
+func startNginx(config *Configuration) error {
+	log.Println("Starting Nginx server...")
+
+	command := fmt.Sprintf("%s -p %s",
+		filepath.Join(config.AppPath, config.ExecutableName),
+		config.AppPath)
+
+	if err := helpers.RunCommand(command, true); err != nil {
+		return fmt.Errorf("failed to start nginx: %w", err)
 	}
+
+	// Verify process is running
+	time.Sleep(500 * time.Millisecond) // Give process time to start
+	running, _ := helpers.IsProcessRunning(config.ExecutableName)
+	if !running {
+		return fmt.Errorf("nginx process failed to start")
+	}
+
+	return nil
 }

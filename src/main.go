@@ -16,10 +16,11 @@ import (
 
 // Service represents a server component that can be started, stopped, and restarted
 type Service struct {
-	Name    string
-	Start   func() error
-	Stop    func() error
-	Restart func() error
+	Name     string
+	Start    func() error
+	Stop     func() error
+	Restart  func() error
+	GetState func() string
 }
 
 func main() {
@@ -37,28 +38,32 @@ func main() {
 	// Define services
 	services := []Service{
 		{
-			Name:    "MySQL",
-			Start:   wrapFunc(mysql.Start),
-			Stop:    wrapFunc(mysql.Stop),
-			Restart: wrapFunc(mysql.Restart),
+			Name:     "MySQL",
+			Start:    mysql.Start,
+			Stop:     mysql.Stop,
+			Restart:  mysql.Restart,
+			GetState: mysql.GetStatus,
 		},
 		{
-			Name:    "SSL",
-			Start:   wrapFunc(ssl.Start),
-			Stop:    wrapFunc(ssl.Stop),
-			Restart: wrapFunc(ssl.Restart),
+			Name:     "SSL",
+			Start:    ssl.Start,
+			Stop:     ssl.Stop,
+			Restart:  ssl.Restart,
+			GetState: ssl.GetStatus,
 		},
 		{
-			Name:    "PHP",
-			Start:   wrapFunc(php.Start),
-			Stop:    wrapFunc(php.Stop),
-			Restart: wrapFunc(php.Restart),
+			Name:     "PHP",
+			Start:    php.Start,
+			Stop:     php.Stop,
+			Restart:  php.Restart,
+			GetState: php.GetStatus,
 		},
 		{
-			Name:    "Nginx",
-			Start:   wrapFunc(nginx.Start),
-			Stop:    wrapFunc(nginx.Stop),
-			Restart: wrapFunc(nginx.Restart),
+			Name:     "Nginx",
+			Start:    nginx.Start,
+			Stop:     nginx.Stop,
+			Restart:  nginx.Restart,
+			GetState: nginx.GetStatus,
 		},
 	}
 
@@ -70,20 +75,14 @@ func main() {
 		stopServices(services)
 	case "restart":
 		restartServices(services)
+	case "status":
+		showStatus(services)
 	case "help":
 		printUsage()
 	default:
 		fmt.Printf("Unknown command: %s\n", command)
 		printUsage()
 		os.Exit(1)
-	}
-}
-
-// wrapFunc wraps a void function to return an error
-func wrapFunc(fn func()) func() error {
-	return func() error {
-		fn()
-		return nil // Assuming the original functions handle their own errors
 	}
 }
 
@@ -177,6 +176,17 @@ func restartServices(services []Service) {
 	fmt.Println("All services restarted successfully")
 }
 
+// showStatus displays the status of all services
+func showStatus(services []Service) {
+	fmt.Println("Service Status:")
+	fmt.Println("==============")
+
+	for _, service := range services {
+		state := service.GetState()
+		fmt.Printf("%-10s: %s\n", service.Name, state)
+	}
+}
+
 // printUsage prints usage information
 func printUsage() {
 	fmt.Println("Usage: server <command>")
@@ -184,5 +194,6 @@ func printUsage() {
 	fmt.Println("  start    - Start all services")
 	fmt.Println("  stop     - Stop all services")
 	fmt.Println("  restart  - Restart all services")
+	fmt.Println("  status   - Show status of all services")
 	fmt.Println("  help     - Show this help message")
 }

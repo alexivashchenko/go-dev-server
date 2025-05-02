@@ -2,150 +2,364 @@ package ssl
 
 import (
 	"fmt"
+	"log"
 	"os"
+	"path/filepath"
+	"runtime"
+	"time"
 
 	"github.com/alexivashchenko/go-dev-server/helpers"
 )
 
-func Start() {
-	// fmt.Println("SSL creating...")
+// Configuration holds all SSL-related paths and settings
+type Configuration struct {
+	RootDir                   string
+	TemplatesDir              string
+	SSLDir                    string
+	WWWDir                    string
+	OpenSSLConfigTemplateFile string
+	OpenSSLConfigFile         string
+	PrivateKeyFile            string
+	CSRFile                   string
+	CertificateFile           string
+	NginxDomainTail           string
+	ValidityDays              int
+}
 
+// NewConfiguration creates a new SSL configuration
+func NewConfiguration() (*Configuration, error) {
 	rootDir := helpers.GetRootDirectory()
-	dirSeparator := string(os.PathSeparator)
-
 	nginxDomainTail := os.Getenv("NGINX_DOMAIN_TAIL")
-
-	templatesDir := rootDir + dirSeparator + "tpl"
-	sslDir := rootDir + dirSeparator + "etc"
-	wwwDir := rootDir + dirSeparator + "www"
-
-	openSslConfigTemplateFile := templatesDir + dirSeparator + "ssl" + dirSeparator + "openssl.conf.tpl"
-	openSslConfigFile := sslDir + dirSeparator + "ssl" + dirSeparator + "openssl.conf"
-	privateKeyFile := sslDir + dirSeparator + "ssl" + dirSeparator + "private.key"
-	csrFile := sslDir + dirSeparator + "ssl" + dirSeparator + "csr.csr"
-	certificateFile := sslDir + dirSeparator + "ssl" + dirSeparator + "certificate.crt"
-
-	// fmt.Println("nginxDomainTail:", nginxDomainTail)
-	// fmt.Println("templatesDir:", templatesDir)
-	// fmt.Println("openSslConfigTemplateFile:", openSslConfigTemplateFile)
-	// fmt.Println("openSslConfigFile:", openSslConfigFile)
-	// fmt.Println("wwwDir:", wwwDir)
-	// fmt.Println("sslDir:", sslDir)
-
-	err := helpers.CopyFile(openSslConfigTemplateFile, openSslConfigFile)
-	if err != nil {
-		fmt.Printf("Error: %v\n", err)
-		os.Exit(0)
+	if nginxDomainTail == "" {
+		return nil, fmt.Errorf("NGINX_DOMAIN_TAIL environment variable is not set")
 	}
 
+	sslDir := filepath.Join(rootDir, "etc", "ssl")
+
+	// Ensure SSL directory exists
+	if err := os.MkdirAll(sslDir, 0755); err != nil {
+		return nil, fmt.Errorf("failed to create SSL directory: %w", err)
+	}
+
+	return &Configuration{
+		RootDir:                   rootDir,
+		TemplatesDir:              filepath.Join(rootDir, "tpl"),
+		SSLDir:                    sslDir,
+		WWWDir:                    filepath.Join(rootDir, "www"),
+		OpenSSLConfigTemplateFile: filepath.Join(rootDir, "tpl", "ssl", "openssl.conf.tpl"),
+		OpenSSLConfigFile:         filepath.Join(sslDir, "openssl.conf"),
+		PrivateKeyFile:            filepath.Join(sslDir, "private.key"),
+		CSRFile:                   filepath.Join(sslDir, "csr.csr"),
+		CertificateFile:           filepath.Join(sslDir, "certificate.crt"),
+		NginxDomainTail:           nginxDomainTail,
+		ValidityDays:              365,
+	}, nil
+}
+
+// Start initializes SSL certificates
+func Start() error {
+	log.Println("Starting SSL configuration...")
+	startTime := time.Now()
+
+	config, err := NewConfiguration()
+	if err != nil {
+		return fmt.Errorf("failed to initialize SSL configuration: %w", err)
+	}
+
+	// Create OpenSSL config file from template
+	if err := helpers.CopyFile(config.OpenSSLConfigTemplateFile, config.OpenSSLConfigFile); err != nil {
+		return fmt.Errorf("failed to copy OpenSSL config template: %w", err)
+	}
+
+	// Generate DNS entries for the certificate
+	dnsLines, err := generateDNSEntries(config)
+	if err != nil {
+		return fmt.Errorf("failed to generate DNS entries: %w", err)
+	}
+
+	// Append DNS entries to OpenSSL config
+	if err := helpers.AppendLines(config.OpenSSLConfigFile, dnsLines); err != nil {
+		return fmt.Errorf("failed to append DNS entries to OpenSSL config: %w", err)
+	}
+
+	// Check if certificate needs to be regenerated
+	regenerate, err := shouldRegenerateCertificate(config)
+	if err != nil {
+		log.Printf("Warning: Could not determine if certificate needs regeneration: %v", err)
+		regenerate = true
+	}
+
+	if regenerate {
+		log.Println("Generating new SSL certificate...")
+		if err := createCertificate(config); err != nil {
+			return fmt.Errorf("failed to create certificate: %w", err)
+		}
+	} else {
+		log.Println("Using existing SSL certificate (still valid)")
+	}
+
+	// Install certificate in the system trust store
+	if err := installCertificate(config); err != nil {
+		return fmt.Errorf("failed to install certificate: %w", err)
+	}
+
+	elapsed := time.Since(startTime)
+	log.Printf("SSL configuration completed in %.2f seconds", elapsed.Seconds())
+	return nil
+}
+
+// Stop removes SSL certificates from the system
+func Stop() error {
+	log.Println("Removing SSL certificates...")
+
+	// Remove certificates from system trust store
+	if err := uninstallCertificate(); err != nil {
+		return fmt.Errorf("failed to uninstall certificate: %w", err)
+	}
+
+	log.Println("SSL certificates removed successfully")
+	return nil
+}
+
+// Restart restarts the SSL configuration
+func Restart() error {
+	log.Println("Restarting SSL configuration...")
+
+	if err := Stop(); err != nil {
+		return fmt.Errorf("failed to stop SSL: %w", err)
+	}
+
+	if err := Start(); err != nil {
+		return fmt.Errorf("failed to start SSL: %w", err)
+	}
+
+	return nil
+}
+
+// generateDNSEntries creates DNS entries for the certificate
+func generateDNSEntries(config *Configuration) ([]string, error) {
 	dnsLines := []string{
 		"IP.1 = 127.0.0.1",
 		"DNS.2 = localhost",
-		// TODO: Add current machine local IP
 	}
 
-	dirs, err := helpers.ListDirectories(wwwDir)
+	// Add local machine IP
+	localIP, err := helpers.GetLocalIP()
+	if err == nil && localIP != "" {
+		dnsLines = append(dnsLines, fmt.Sprintf("IP.2 = %s", localIP))
+	}
+
+	// Get website directories
+	dirs, err := helpers.ListDirectories(config.WWWDir)
 	if err != nil {
-		fmt.Printf("Error: %v\n", err)
-		os.Exit(0)
+		return nil, fmt.Errorf("failed to list website directories: %w", err)
 	}
 
+	// Add DNS entries for each website directory
 	dnsIndex := 3
 	for _, dir := range dirs {
-		// fmt.Println(dir)
-		const dnsFormat = "DNS.%v = %s"
-		const dnsWildcardFormat = "DNS.%v = *.%s"
-		dnsLines = append(dnsLines, fmt.Sprintf(dnsFormat, dnsIndex, dir+"."+nginxDomainTail))
+		baseName := filepath.Base(dir)
+		domain := fmt.Sprintf("%s.%s", baseName, config.NginxDomainTail)
+
+		dnsLines = append(dnsLines, fmt.Sprintf("DNS.%d = %s", dnsIndex, domain))
 		dnsIndex++
-		dnsLines = append(dnsLines, fmt.Sprintf(dnsWildcardFormat, dnsIndex, dir+"."+nginxDomainTail))
+
+		dnsLines = append(dnsLines, fmt.Sprintf("DNS.%d = *.%s", dnsIndex, domain))
 		dnsIndex++
 	}
 
-	dnsLines = append(dnsLines, fmt.Sprintf("DNS.%v = *.localhost", dnsIndex)) // DNS.N = *.localhost
+	// Add wildcard entries
+	dnsLines = append(dnsLines, fmt.Sprintf("DNS.%d = *.localhost", dnsIndex))
 	dnsIndex++
+	dnsLines = append(dnsLines, fmt.Sprintf("DNS.%d = *.%s", dnsIndex, config.NginxDomainTail))
 
-	dnsLines = append(dnsLines, fmt.Sprintf("DNS.%v = *.%s", dnsIndex, nginxDomainTail)) // DNS.N = *.oo
-	dnsIndex++
-
-	// for _, dnsLine := range dnsLines {
-	// 	fmt.Println("dnsLine:", dnsLine)
-	// }
-
-	err = helpers.AppendLines(openSslConfigFile, dnsLines)
-	if err != nil {
-		fmt.Printf("Error: %v\n", err)
-		os.Exit(0)
-	}
-
-	// TODO: Create/Update Certificate only if domains was changed
-	createCertificate(privateKeyFile, csrFile, openSslConfigFile, certificateFile)
-
-	deleteWindowsCertificate()
-
-	addWindowsCertificate(certificateFile)
-
-	// fmt.Println("SSL created.")
+	return dnsLines, nil
 }
 
-func Stop() {
-	// fmt.Println("SSL deleting...")
-
-	deleteWindowsCertificate()
-
-	// fmt.Println("SSL deleted.")
-}
-
-func Restart() {
-	Stop()
-	Start()
-}
-
-func createCertificate(privateKeyFile string, csrFile string, openSslConfigFile string, certificateFile string) {
-	// https://arie-m-prasetyo.medium.com/local-secure-web-server-with-nginx-and-ssl-125256e7a2f5
-
-	// create Private Key
-	// openssl genrsa -verbose -out ${PWD}/etc/ssl/private.key 2048
-	err := helpers.RunCommand("openssl genrsa -verbose -out "+privateKeyFile+" 2048", false)
-	if err != nil {
-		fmt.Printf("Error: %v\n", err)
-		os.Exit(0)
+// shouldRegenerateCertificate checks if the certificate needs to be regenerated
+func shouldRegenerateCertificate(config *Configuration) (bool, error) {
+	// Check if certificate exists
+	if _, err := os.Stat(config.CertificateFile); os.IsNotExist(err) {
+		return true, nil
 	}
 
-	// generate CSR
-	// openssl req -new -key ${PWD}/etc/ssl/private.key -out ${PWD}/etc/ssl/csr.csr -verbose -config "${PWD}/etc/ssl/openssl.conf"
-	err = helpers.RunCommand("openssl req -new -key "+privateKeyFile+" -out "+csrFile+" -verbose -config "+openSslConfigFile, false)
-	if err != nil {
-		fmt.Printf("Error: %v\n", err)
-		os.Exit(0)
+	// TODO: Check certificate expiration date
+	// TODO: Check if domains have changed since last generation
+
+	return false, nil
+}
+
+// createCertificate generates a new SSL certificate
+func createCertificate(config *Configuration) error {
+	log.Println("Generating private key...")
+	cmd := fmt.Sprintf("openssl genrsa -out %s 2048", config.PrivateKeyFile)
+	if err := helpers.RunCommand(cmd, false); err != nil {
+		return fmt.Errorf("failed to generate private key: %w", err)
 	}
 
-	// generate Certificate
-	// openssl x509 -req -days 365 -in ${PWD}/etc/ssl/csr.csr -signkey ${PWD}/etc/ssl/private.key -out ${PWD}/etc/ssl/certificate.crt -extensions v3_req -extfile "${PWD}/etc/ssl/openssl.conf"
-	err = helpers.RunCommand("openssl x509 -req -days 365 -in "+csrFile+" -signkey "+privateKeyFile+" -out "+certificateFile+" -extensions v3_req -extfile "+openSslConfigFile, false)
-	if err != nil {
-		fmt.Printf("Error: %v\n", err)
-		os.Exit(0)
+	log.Println("Generating certificate signing request...")
+	cmd = fmt.Sprintf("openssl req -new -key %s -out %s -config %s",
+		config.PrivateKeyFile, config.CSRFile, config.OpenSSLConfigFile)
+	if err := helpers.RunCommand(cmd, false); err != nil {
+		return fmt.Errorf("failed to generate CSR: %w", err)
+	}
+
+	log.Println("Generating self-signed certificate...")
+	cmd = fmt.Sprintf("openssl x509 -req -days %d -in %s -signkey %s -out %s -extensions v3_req -extfile %s",
+		config.ValidityDays, config.CSRFile, config.PrivateKeyFile, config.CertificateFile, config.OpenSSLConfigFile)
+	if err := helpers.RunCommand(cmd, false); err != nil {
+		return fmt.Errorf("failed to generate certificate: %w", err)
+	}
+
+	return nil
+}
+
+// installCertificate installs the certificate in the system trust store
+func installCertificate(config *Configuration) error {
+	switch runtime.GOOS {
+	case "windows":
+		return installWindowsCertificate(config.CertificateFile)
+	case "darwin":
+		return installMacCertificate(config.CertificateFile)
+	case "linux":
+		return installLinuxCertificate(config.CertificateFile)
+	default:
+		return fmt.Errorf("unsupported operating system: %s", runtime.GOOS)
 	}
 }
 
-func addWindowsCertificate(certificateFile string) {
-	// add new certificate to Windows
-	// powershell -Command "Start-Process -Verb RunAs powershell \"Import-Certificate -FilePath "C:\\server\\etc\\ssl\\certificate.crt" -CertStoreLocation Cert:\\LocalMachine\\Root\""
-
-	err := helpers.RunPowerShellAsAdmin("Import-Certificate -FilePath \"" + certificateFile + "\" -CertStoreLocation Cert:\\LocalMachine\\Root")
-	if err != nil {
-		fmt.Printf("Error: %v\n", err)
-		os.Exit(0)
+// uninstallCertificate removes the certificate from the system trust store
+func uninstallCertificate() error {
+	switch runtime.GOOS {
+	case "windows":
+		return uninstallWindowsCertificate()
+	case "darwin":
+		return uninstallMacCertificate()
+	case "linux":
+		return uninstallLinuxCertificate()
+	default:
+		return fmt.Errorf("unsupported operating system: %s", runtime.GOOS)
 	}
 }
 
-func deleteWindowsCertificate() {
-	// remove old Windows Certificates
-	// powershell -Command "Start-Process -Verb RunAs powershell \"Get-ChildItem Cert:\\LocalMachine\\Root | Where-Object Subject -Like '*local_server*' | Remove-Item\""
-
-	err := helpers.RunPowerShellAsAdmin("Get-ChildItem Cert:\\LocalMachine\\Root | Where-Object Subject -Like \"*local_server*\" | Remove-Item")
+// Windows-specific certificate installation
+func installWindowsCertificate(certificateFile string) error {
+	log.Println("Installing certificate in Windows trust store...")
+	err := helpers.RunPowerShellAsAdmin(fmt.Sprintf(
+		"Import-Certificate -FilePath \"%s\" -CertStoreLocation Cert:\\LocalMachine\\Root",
+		certificateFile))
 	if err != nil {
-		fmt.Printf("Error: %v\n", err)
-		os.Exit(0)
+		return fmt.Errorf("failed to install Windows certificate: %w", err)
 	}
+	return nil
+}
+
+// Windows-specific certificate removal
+func uninstallWindowsCertificate() error {
+	log.Println("Removing certificate from Windows trust store...")
+	err := helpers.RunPowerShellAsAdmin(
+		"Get-ChildItem Cert:\\LocalMachine\\Root | Where-Object Subject -Like \"*local_server*\" | Remove-Item")
+	if err != nil {
+		return fmt.Errorf("failed to remove Windows certificate: %w", err)
+	}
+	return nil
+}
+
+// macOS-specific certificate installation
+func installMacCertificate(certificateFile string) error {
+	log.Println("Installing certificate in macOS trust store...")
+	// Add certificate to keychain
+	cmd := fmt.Sprintf("security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain %s", certificateFile)
+	if err := helpers.RunCommand(cmd, true); err != nil {
+		return fmt.Errorf("failed to install macOS certificate: %w", err)
+	}
+	return nil
+}
+
+// macOS-specific certificate removal
+func uninstallMacCertificate() error {
+	log.Println("Removing certificate from macOS trust store...")
+	// Find and remove certificate from keychain
+	cmd := "security find-certificate -a -c local_server -Z | grep SHA-1 | awk '{print $NF}' | xargs -I {} security delete-certificate -Z {}"
+	if err := helpers.RunCommand(cmd, true); err != nil {
+		return fmt.Errorf("failed to remove macOS certificate: %w", err)
+	}
+	return nil
+}
+
+// Linux-specific certificate installation
+func installLinuxCertificate(certificateFile string) error {
+	log.Println("Installing certificate in Linux trust store...")
+
+	// Detect distribution
+	if _, err := os.Stat("/etc/debian_version"); err == nil {
+		// Debian/Ubuntu
+		destPath := "/usr/local/share/ca-certificates/local_server.crt"
+		if err := helpers.CopyFile(certificateFile, destPath); err != nil {
+			return fmt.Errorf("failed to copy certificate: %w", err)
+		}
+
+		if err := helpers.RunCommand("update-ca-certificates", true); err != nil {
+			return fmt.Errorf("failed to update CA certificates: %w", err)
+		}
+	} else if _, err := os.Stat("/etc/redhat-release"); err == nil {
+		// RHEL/CentOS/Fedora
+		destPath := "/etc/pki/ca-trust/source/anchors/local_server.crt"
+		if err := helpers.CopyFile(certificateFile, destPath); err != nil {
+			return fmt.Errorf("failed to copy certificate: %w", err)
+		}
+
+		if err := helpers.RunCommand("update-ca-trust extract", true); err != nil {
+			return fmt.Errorf("failed to update CA certificates: %w", err)
+		}
+	} else {
+		return fmt.Errorf("unsupported Linux distribution")
+	}
+
+	return nil
+}
+
+// Linux-specific certificate removal
+func uninstallLinuxCertificate() error {
+	log.Println("Removing certificate from Linux trust store...")
+
+	// Detect distribution
+	if _, err := os.Stat("/etc/debian_version"); err == nil {
+		// Debian/Ubuntu
+		if err := os.Remove("/usr/local/share/ca-certificates/local_server.crt"); err != nil && !os.IsNotExist(err) {
+			return fmt.Errorf("failed to remove certificate: %w", err)
+		}
+
+		if err := helpers.RunCommand("update-ca-certificates --fresh", true); err != nil {
+			return fmt.Errorf("failed to update CA certificates: %w", err)
+		}
+	} else if _, err := os.Stat("/etc/redhat-release"); err == nil {
+		// RHEL/CentOS/Fedora
+		if err := os.Remove("/etc/pki/ca-trust/source/anchors/local_server.crt"); err != nil && !os.IsNotExist(err) {
+			return fmt.Errorf("failed to remove certificate: %w", err)
+		}
+
+		if err := helpers.RunCommand("update-ca-trust extract", true); err != nil {
+			return fmt.Errorf("failed to update CA certificates: %w", err)
+		}
+	} else {
+		return fmt.Errorf("unsupported Linux distribution")
+	}
+
+	return nil
+}
+
+// GetStatus returns the current status of the SSL configuration
+func GetStatus() string {
+	config, err := NewConfiguration()
+	if err != nil {
+		return "Error: " + err.Error()
+	}
+
+	if _, err := os.Stat(config.CertificateFile); os.IsNotExist(err) {
+		return "Not configured"
+	}
+
+	// TODO: Check certificate expiration and return more detailed status
+	return "Active"
 }
