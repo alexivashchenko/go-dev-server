@@ -8,7 +8,7 @@ import (
 )
 
 func Start() {
-	fmt.Println("MySQL starting...")
+	// fmt.Println("MySQL starting...")
 
 	rootDir := helpers.GetRootDirectory()
 	dirSeparator := string(os.PathSeparator)
@@ -60,12 +60,12 @@ func Start() {
 		os.Exit(0)
 	}
 
-	fmt.Println("MySQL started.")
+	// fmt.Println("MySQL started.")
 
 }
 
 func Stop() {
-	fmt.Println("MySQL stopping...")
+	// fmt.Println("MySQL stopping...")
 
 	err := helpers.KillProcess("mysqld.exe")
 	if err != nil {
@@ -73,7 +73,7 @@ func Stop() {
 		os.Exit(0)
 	}
 
-	fmt.Println("MySQL stopped.")
+	// fmt.Println("MySQL stopped.")
 }
 
 func Restart() {

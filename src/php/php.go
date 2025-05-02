@@ -9,7 +9,7 @@ import (
 )
 
 func Start() {
-	fmt.Println("PHP starting...")
+	// fmt.Println("PHP starting...")
 
 	rootDir := helpers.GetRootDirectory()
 	dirSeparator := string(os.PathSeparator)
@@ -75,12 +75,12 @@ func Start() {
 		os.Exit(0)
 	}
 
-	fmt.Println("PHP started.")
+	// fmt.Println("PHP started.")
 
 }
 
 func Stop() {
-	fmt.Println("PHP stopping...")
+	// fmt.Println("PHP stopping...")
 
 	err := helpers.KillProcess("php-cgi.exe")
 	if err != nil {
@@ -88,7 +88,7 @@ func Stop() {
 		os.Exit(0)
 	}
 
-	fmt.Println("PHP stopped.")
+	// fmt.Println("PHP stopped.")
 }
 
 func Restart() {

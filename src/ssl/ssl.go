@@ -8,7 +8,7 @@ import (
 )
 
 func Start() {
-	fmt.Println("SSL creating...")
+	// fmt.Println("SSL creating...")
 
 	rootDir := helpers.GetRootDirectory()
 	dirSeparator := string(os.PathSeparator)
@@ -84,15 +84,15 @@ func Start() {
 
 	addWindowsCertificate(certificateFile)
 
-	fmt.Println("SSL created.")
+	// fmt.Println("SSL created.")
 }
 
 func Stop() {
-	fmt.Println("SSL deleting...")
+	// fmt.Println("SSL deleting...")
 
 	deleteWindowsCertificate()
 
-	fmt.Println("SSL deleted.")
+	// fmt.Println("SSL deleted.")
 }
 
 func Restart() {

@@ -9,7 +9,7 @@ import (
 )
 
 func Stop() {
-	fmt.Println("NGINX stopping...")
+	// fmt.Println("NGINX stopping...")
 
 	err := helpers.KillProcess("nginx.exe")
 	if err != nil {
@@ -17,7 +17,7 @@ func Stop() {
 		os.Exit(0)
 	}
 
-	fmt.Println("NGINX stopped.")
+	// fmt.Println("NGINX stopped.")
 }
 
 func Restart() {
@@ -26,7 +26,7 @@ func Restart() {
 }
 
 func Start() {
-	fmt.Println("NGINX starting...")
+	// fmt.Println("NGINX starting...")
 
 	rootDir := helpers.GetRootDirectory()
 	dirSeparator := string(os.PathSeparator)
@@ -119,7 +119,7 @@ func Start() {
 		dirSeparator,
 	)
 
-	fmt.Println("NGINX started.")
+	// fmt.Println("NGINX started.")
 
 }
 
