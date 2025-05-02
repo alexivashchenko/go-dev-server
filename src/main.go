@@ -8,6 +8,7 @@ import (
 
 	"github.com/alexivashchenko/go-dev-server/env"
 	"github.com/alexivashchenko/go-dev-server/helpers"
+	"github.com/alexivashchenko/go-dev-server/mailpit"
 	"github.com/alexivashchenko/go-dev-server/mysql"
 	"github.com/alexivashchenko/go-dev-server/nginx"
 	"github.com/alexivashchenko/go-dev-server/php"
@@ -64,6 +65,13 @@ func main() {
 			Stop:     nginx.Stop,
 			Restart:  nginx.Restart,
 			GetState: nginx.GetStatus,
+		},
+		{
+			Name:     "Mailpit",
+			Start:    mailpit.Start,
+			Stop:     mailpit.Stop,
+			Restart:  mailpit.Restart,
+			GetState: mailpit.GetStatus,
 		},
 	}
 

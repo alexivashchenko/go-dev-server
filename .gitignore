@@ -14,3 +14,4 @@ hosts.tmp
 src/.env
 .env
 server.exe
+src/go-dev-server.exe

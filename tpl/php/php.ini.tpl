@@ -938,7 +938,7 @@ pdo_mysql.default_socket=
 ; https://php.net/smtp
 SMTP=localhost
 ; https://php.net/smtp-port
-smtp_port=25
+smtp_port=1025
 ; For Win32 only.
 ; https://php.net/sendmail-from
 ;sendmail_from = me@example.com
