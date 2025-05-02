@@ -29,6 +29,8 @@ type Configuration struct {
 	Host            string
 	Port            int
 	ProcessName     string
+	MailpitSmtpHost string
+	MailpitSmtpPort string
 }
 
 // NewConfiguration creates a new PHP configuration
@@ -70,6 +72,8 @@ func NewConfiguration() (*Configuration, error) {
 		"PHP_SESSION_SAVE_PATH": &config.SessionSavePath,
 		"PHP_CURL_CAINFO":       &config.CurlCaInfo,
 		"PHP_SENDMAIL_PATH":     &config.SendmailPath,
+		"MAILPIT_SMTP_HOST":     &config.MailpitSmtpHost,
+		"MAILPIT_SMTP_PORT":     &config.MailpitSmtpPort,
 	}
 
 	for envName, configVar := range envVars {
@@ -227,6 +231,8 @@ func createPHPConfig(config *Configuration) error {
 		"{PHP_SESSION_SAVE_PATH}": config.SessionSavePath,
 		"{PHP_CURL_CAINFO}":       config.CurlCaInfo,
 		"{PHP_SENDMAIL_PATH}":     config.SendmailPath,
+		"{MAILPIT_SMTP_HOST}":     config.MailpitSmtpHost,
+		"{MAILPIT_SMTP_PORT}":     config.MailpitSmtpPort,
 	}
 
 	if err := helpers.ReplaceInFileByMap(config.IniFile, replaceMap); err != nil {
