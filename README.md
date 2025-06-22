@@ -54,11 +54,11 @@ Different versions of MySQL, NGX and PHP can be used, - just drop new version to
 
 [PHP-8.4](https://windows.php.net/downloads/releases/archives/php-8.4.3-Win32-vs17-x64.zip)
 
-[PHP-8.3](https://windows.php.net/downloads/releases/archives/php-8.3.16-nts-Win32-vs16-x64.zip)
+[PHP-8.3](https://windows.php.net/downloads/releases/archives/php-8.3.16-Win32-vs16-x64.zip)
 
-[PHP-8.2](https://windows.php.net/downloads/releases/archives/php-8.2.26-nts-Win32-vs16-x64.zip)
+[PHP-8.2](https://windows.php.net/downloads/releases/archives/php-8.2.26-Win32-vs16-x64.zip)
 
-[PHP-8.1](https://windows.php.net/downloads/releases/archives/php-8.1.30-nts-Win32-vs16-x64.zip)
+[PHP-8.1](https://windows.php.net/downloads/releases/archives/php-8.1.30-Win32-vs16-x64.zip)
 
 ### NGINX versions:
 

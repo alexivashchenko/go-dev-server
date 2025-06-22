@@ -1,12 +1,17 @@
 .history
 apps/mysql/*
+!apps/mysql/.gitkeep
 apps/nginx/*
+!apps/nginx/.gitkeep
 apps/php/*
+!apps/php/.gitkeep
 data/*
+!data/.gitkeep
 etc/nginx/sites-enabled/*
 etc/php/*
 etc/ssl/*
 logs/*
+!logs/.gitkeep
 tmp/*
 www/*
 !www/index.php
