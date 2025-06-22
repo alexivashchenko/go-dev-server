@@ -332,6 +332,10 @@ func configureNginx(config *Configuration) error {
 		return fmt.Errorf("failed to update default site configuration: %w", err)
 	}
 
+	if err := helpers.ReplaceInFile(defaultConfFile, "{php_version}", os.Getenv("PHP_VERSION")); err != nil {
+		return fmt.Errorf("failed to update default site configuration: %w", err)
+	}
+
 	return nil
 }
 
@@ -361,6 +365,7 @@ func createSiteConfigurations(config *Configuration) error {
 			"{root_folder}": helpers.ReplaceBackslashToSlash(config.RootDir + string(os.PathSeparator)),
 			"{folder_name}": baseName,
 			"{domain_name}": domainName,
+			"{php_version}": os.Getenv("PHP_VERSION"),
 		}
 
 		for placeholder, value := range replacements {

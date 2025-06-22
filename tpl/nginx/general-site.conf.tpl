@@ -17,7 +17,7 @@ server {
     location ~ \.php$ {
         include snippets/fastcgi-php.conf;
         fastcgi_pass php_upstream;
-        #fastcgi_pass unix:/run/php/php7.0-fpm.sock;
+        #fastcgi_pass unix:/run/php/php{php_version}-fpm.sock;
     }
 
     ssl_certificate "{root_folder}etc/ssl/certificate.crt";
