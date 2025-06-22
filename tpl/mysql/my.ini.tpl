@@ -22,6 +22,16 @@ explicit_defaults_for_timestamp=1
 skip-grant-tables=1
 shared-memory=1
 
+log_output=file
+general_log=OFF
+general_log_file={root_folder}logs/mysql/general-log.log
+log_error={root_folder}logs/mysql/log-error.log
+
+[mysqld_safe]
+log_error={root_folder}logs/mysql/log-error.log
+
+
 [mysqldump]
 quick
 max_allowed_packet=512M
+
