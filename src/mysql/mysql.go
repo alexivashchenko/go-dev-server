@@ -22,9 +22,9 @@ type Configuration struct {
 	DataDir            string
 	TemplatesDir       string
 	ConfigFile         string
-	InitFile         string
+	InitFile           string
 	ConfigTemplateFile string
-	InitTemplateFile string
+	InitTemplateFile   string
 	ExecutableName     string
 	Port               int
 	User               string
@@ -249,7 +249,7 @@ func copyAndUpdateMySQLConfig(config *Configuration) error {
 	rootDirFormatted := helpers.ReplaceBackslashToSlash(config.RootDir + string(os.PathSeparator))
 	replacements := map[string]string{
 		"{mysql_data_folder}": config.DataFolder,
-		"{root_folder}": rootDirFormatted,
+		"{root_folder}":       rootDirFormatted,
 	}
 
 	for placeholder, value := range replacements {
@@ -274,7 +274,6 @@ func copyAndUpdateMySQLInitFile(config *Configuration) error {
 
 	return nil
 }
-
 
 // startMySQLServer starts the MySQL server
 func startMySQLServer(config *Configuration) error {
