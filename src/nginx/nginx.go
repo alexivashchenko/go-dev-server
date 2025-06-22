@@ -354,10 +354,17 @@ func createSiteConfigurations(config *Configuration) error {
 		baseName := filepath.Base(dir)
 		domainName := baseName + "." + config.DomainTail
 		siteConfFile := filepath.Join(config.SitesEnabledFolder, domainName+".conf")
+		customSiteConfFile := filepath.Join(config.WWWDir, baseName, domainName+".conf")
 
-		// Copy site template
-		if err := helpers.CopyFile(config.GeneralSiteTemplate, siteConfFile); err != nil {
-			return fmt.Errorf("failed to copy site template for %s: %w", domainName, err)
+		// Copy site template only if custom conf file doesn't exist
+		if _, err := os.Stat(customSiteConfFile); err == nil {
+			if err := helpers.CopyFile(customSiteConfFile, siteConfFile); err != nil {
+				return fmt.Errorf("failed to copy custom site config for %s: %w", domainName, err)
+			}
+		} else {
+			if err := helpers.CopyFile(config.GeneralSiteTemplate, siteConfFile); err != nil {
+				return fmt.Errorf("failed to copy site template for %s: %w", domainName, err)
+			}
 		}
 
 		// Replace placeholders
