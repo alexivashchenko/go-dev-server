@@ -4,7 +4,7 @@ port=3306
 socket=/tmp/mysql.sock
 
 [mysqld]
-datadir="C:/server/data/{mysql_data_folder}"
+datadir="{root_folder}data/{mysql_data_folder}"
 port=3306
 socket=/tmp/mysql.sock
 key_buffer_size=256M

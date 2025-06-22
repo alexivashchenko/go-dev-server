@@ -202,14 +202,9 @@ func initializeMySQL(config *Configuration) error {
 		return fmt.Errorf("failed to create data directory: %w", err)
 	}
 
-	// Copy configuration template
-	if err := helpers.CopyFile(config.ConfigTemplateFile, config.ConfigFile); err != nil {
-		return fmt.Errorf("failed to copy MySQL configuration template: %w", err)
-	}
-
-	// Update configuration with data folder path
-	if err := updateMySQLConfig(config); err != nil {
-		return fmt.Errorf("failed to update MySQL configuration: %w", err)
+	// Copy and update configuration template
+	if err := copyAndUpdateMySQLConfig(config); err != nil {
+		return fmt.Errorf("failed to copy and update MySQL configuration: %w", err)
 	}
 
 	// Run MySQL initialization
@@ -234,11 +229,18 @@ func initializeMySQL(config *Configuration) error {
 	return nil
 }
 
-// updateMySQLConfig updates the MySQL configuration file
-func updateMySQLConfig(config *Configuration) error {
+// copyAndUpdateMySQLConfig copies and updates the MySQL configuration file
+func copyAndUpdateMySQLConfig(config *Configuration) error {
+	// Copy configuration template
+	if err := helpers.CopyFile(config.ConfigTemplateFile, config.ConfigFile); err != nil {
+		return fmt.Errorf("failed to copy MySQL configuration template: %w", err)
+	}
+
 	// Replace placeholders in the configuration file
+	rootDirFormatted := helpers.ReplaceBackslashToSlash(config.RootDir + string(os.PathSeparator))
 	replacements := map[string]string{
 		"{mysql_data_folder}": config.DataFolder,
+		"{root_folder}": rootDirFormatted,
 	}
 
 	for placeholder, value := range replacements {

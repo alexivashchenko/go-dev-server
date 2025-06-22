@@ -52,7 +52,7 @@ Different versions of MySQL, NGX and PHP can be used, - just drop new version to
 
 ### PHP versions:
 
-[PHP-8.4](https://windows.php.net/downloads/releases/archives/php-8.4.3-nts-Win32-vs17-x64.zip)
+[PHP-8.4](https://windows.php.net/downloads/releases/archives/php-8.4.3-Win32-vs17-x64.zip)
 
 [PHP-8.3](https://windows.php.net/downloads/releases/archives/php-8.3.16-nts-Win32-vs16-x64.zip)
 

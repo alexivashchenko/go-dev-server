@@ -115,6 +115,11 @@ func Start() error {
 		return fmt.Errorf("failed to create required directories: %w", err)
 	}
 
+	// Copy fastcgi-php.conf to snippets directory
+	if err := copyFastCGIConfig(config); err != nil {
+		return fmt.Errorf("failed to copy fastcgi-php.conf: %w", err)
+	}
+
 	// Update hosts file
 	if err := updateHostsFile(config); err != nil {
 		return fmt.Errorf("failed to update hosts file: %w", err)
@@ -205,16 +210,30 @@ func GetStatus() string {
 
 // ensureDirectoriesExist creates necessary directories
 func ensureDirectoriesExist(config *Configuration) error {
+	snippetsDir := filepath.Join(config.AppPath, "conf", "snippets")
 	directories := []string{
 		config.EtcFolder,
 		config.SitesEnabledFolder,
 		config.LogsDir,
+		snippetsDir,
 	}
 
 	for _, dir := range directories {
 		if err := os.MkdirAll(dir, 0755); err != nil {
 			return fmt.Errorf("failed to create directory %s: %w", dir, err)
 		}
+	}
+
+	return nil
+}
+
+// copyFastCGIConfig copies fastcgi-php.conf to snippets directory
+func copyFastCGIConfig(config *Configuration) error {
+	sourceFile := filepath.Join(config.TemplatesDir, "nginx", "fastcgi-php.conf")
+	destFile := filepath.Join(config.AppPath, "conf", "snippets", "fastcgi-php.conf")
+
+	if err := helpers.CopyFile(sourceFile, destFile); err != nil {
+		return fmt.Errorf("failed to copy fastcgi-php.conf: %w", err)
 	}
 
 	return nil

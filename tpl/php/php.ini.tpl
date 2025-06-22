@@ -1282,7 +1282,7 @@ session.use_trans_sid=0
 ; Default Value: 32
 ; Development Value: 26
 ; Production Value: 26
-session.sid_length=26
+;session.sid_length=26
 ; The URL rewriter will look for URLs in a defined set of HTML tags.
 ; <form> is special; if you include them here, the rewriter will
 ; add a hidden <input> field with the info which is otherwise appended
@@ -1316,7 +1316,7 @@ session.trans_sid_tags="a=href,area=href,frame=src,form="
 ; Development Value: 5
 ; Production Value: 5
 ; https://php.net/session.hash-bits-per-character
-session.sid_bits_per_character=5
+;session.sid_bits_per_character=5
 ; Enable upload progress tracking in $_SESSION
 ; Default Value: On
 ; Development Value: On
