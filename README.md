@@ -8,8 +8,9 @@ It runs with NGINX, MySQL, PHP.
 ## How to use it:
 
 1. Build `server.exe` file
-2. Drop site folder to www directory
-3. Start server
+2. Add apps
+3. Drop site folder to www directory
+4. Start server
 
 ### 1. Build server.exe file
 
@@ -17,7 +18,27 @@ It runs with NGINX, MySQL, PHP.
 
 `go build -o ../server.exe`
 
-### 2. Drop site folder to www directory
+### 2. Add apps
+
+#### 2.1 Add NGINX
+
+Get NGINX from [Nginx-1.27.4](https://nginx.org/download/nginx-1.27.4.zip) and put into `/apps/nginx/nginx-1.27.4`.
+
+Update "PATH" environmental variable `...\go-dev-server\apps\nginx\nginx-1.27.4`.
+
+#### 2.2 Add PHP
+
+Get PHP from [PHP-8.4](https://windows.php.net/downloads/releases/archives/php-8.4.3-Win32-vs17-x64.zip) and put into `/apps/php/php-8.4.3-Win32-vs17-x64`.
+
+Update "PATH" environmental variable `...\go-dev-server\apps\php\php-8.4.3-Win32-vs17-x64`.
+
+#### 2.3 Add MySQL
+
+Get MySQL from [mysql-8.4](https://dev.mysql.com/get/Downloads/MySQL-8.4/mysql-8.4.3-winx64.zip) and put into `/apps/mysql/mysql-8.0.30-winx64`.
+
+Update "PATH" environmental variable `...\go-dev-server\apps\mysql\mysql-8.0.30-winx64\bin`.
+
+### 3. Drop site folder to www directory
 
 `cd ..`
 
@@ -25,7 +46,7 @@ It runs with NGINX, MySQL, PHP.
 
 `touch www/site-1/index.php`
 
-### 3. Start server
+### 4. Start server
 
 `./server start`
 
