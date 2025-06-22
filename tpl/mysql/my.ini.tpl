@@ -4,7 +4,6 @@ port=3306
 socket=/tmp/mysql.sock
 
 [mysqld]
-datadir="{root_folder}data/{mysql_data_folder}"
 port=3306
 socket=/tmp/mysql.sock
 key_buffer_size=256M
@@ -16,19 +15,10 @@ read_rnd_buffer_size=4M
 myisam_sort_buffer_size=64M
 thread_cache_size=8
 
-# secure-file-priv=""
+secure-file-priv=""
 explicit_defaults_for_timestamp=1
-
-skip-grant-tables=1
-shared-memory=1
-
-log_output=file
-general_log=OFF
-general_log_file={root_folder}logs/mysql/general-log.log
-log_error={root_folder}logs/mysql/log-error.log
-
-[mysqld_safe]
-log_error={root_folder}logs/mysql/log-error.log
+datadir="{root_folder}data/{mysql_data_folder}"
+default_authentication_plugin=mysql_native_password
 
 
 [mysqldump]

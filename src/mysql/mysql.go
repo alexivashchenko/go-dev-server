@@ -18,10 +18,13 @@ type Configuration struct {
 	AppFolder          string
 	DataFolder         string
 	AppDir             string
+	EtcDir             string
 	DataDir            string
 	TemplatesDir       string
 	ConfigFile         string
+	InitFile         string
 	ConfigTemplateFile string
+	InitTemplateFile string
 	ExecutableName     string
 	Port               int
 	User               string
@@ -44,6 +47,9 @@ func NewConfiguration() (*Configuration, error) {
 		return nil, fmt.Errorf("MYSQL_DATA_FOLDER environment variable is not set")
 	}
 
+	// Get MySQL data folder from environment
+	mysqlRootPassword := os.Getenv("MYSQL_ROOT_PASSWORD")
+
 	// Determine executable name based on OS
 	executableName := "mysqld"
 	if runtime.GOOS == "windows" {
@@ -58,15 +64,18 @@ func NewConfiguration() (*Configuration, error) {
 		ExecutableName: executableName,
 		Port:           3306,
 		User:           "root",
-		Password:       "", // Default password is empty after initialization
+		Password:       mysqlRootPassword,
 	}
 
 	// Set paths
 	config.AppDir = filepath.Join(rootDir, "apps", "mysql", mysqlAppFolder)
+	config.EtcDir = filepath.Join(rootDir, "etc", "mysql")
 	config.DataDir = filepath.Join(rootDir, "data", mysqlDataFolder)
 	config.TemplatesDir = filepath.Join(rootDir, "tpl")
 	config.ConfigFile = filepath.Join(config.AppDir, "my.ini")
+	config.InitFile = filepath.Join(config.EtcDir, "mysql-init.txt")
 	config.ConfigTemplateFile = filepath.Join(config.TemplatesDir, "mysql", "my.ini.tpl")
+	config.InitTemplateFile = filepath.Join(config.TemplatesDir, "mysql", "mysql-init.txt.tpl")
 
 	// Validate template file exists
 	if _, err := os.Stat(config.ConfigTemplateFile); os.IsNotExist(err) {
@@ -252,12 +261,32 @@ func copyAndUpdateMySQLConfig(config *Configuration) error {
 	return nil
 }
 
+// copyAndUpdateMySQLInitFile copies and updates the MySQL init file
+func copyAndUpdateMySQLInitFile(config *Configuration) error {
+	// Copy configuration template
+	if err := helpers.CopyFile(config.InitTemplateFile, config.InitFile); err != nil {
+		return fmt.Errorf("failed to copy MySQL init template: %w", err)
+	}
+
+	if err := helpers.ReplaceInFile(config.InitFile, "{mysql_root_password}", config.Password); err != nil {
+		return fmt.Errorf("failed to update MySQL init file: %w", err)
+	}
+
+	return nil
+}
+
+
 // startMySQLServer starts the MySQL server
 func startMySQLServer(config *Configuration) error {
 	log.Println("Starting MySQL server...")
 
+	// Copy and update init template
+	if err := copyAndUpdateMySQLInitFile(config); err != nil {
+		return fmt.Errorf("failed to copy and update MySQL init: %w", err)
+	}
+
 	mysqldPath := filepath.Join(config.AppDir, "bin", config.ExecutableName)
-	command := fmt.Sprintf("%s --defaults-file=%s", mysqldPath, config.ConfigFile)
+	command := fmt.Sprintf("%s --defaults-file=%s --init-file=%s", mysqldPath, config.ConfigFile, config.InitFile)
 
 	if err := helpers.RunCommand(command, true); err != nil {
 		return fmt.Errorf("failed to start MySQL server: %w", err)
