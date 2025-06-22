@@ -65,7 +65,7 @@ func NewConfiguration() (*Configuration, error) {
 		AppFolder:           nginxAppFolder,
 		DomainTail:          nginxDomainTail,
 		HostsFilePath:       hostsFilePath,
-		HostsFileIdentifier: "#local server setting",
+		HostsFileIdentifier: "#local_server_setting",
 		ExecutableName:      executableName,
 	}
 
