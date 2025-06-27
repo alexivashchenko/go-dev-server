@@ -22,6 +22,7 @@ type Configuration struct {
 	PrivateKeyFile            string
 	CSRFile                   string
 	CertificateFile           string
+	PEMFile                   string
 	NginxDomainTail           string
 	ValidityDays              int
 }
@@ -51,6 +52,7 @@ func NewConfiguration() (*Configuration, error) {
 		PrivateKeyFile:            filepath.Join(sslDir, "private.key"),
 		CSRFile:                   filepath.Join(sslDir, "csr.csr"),
 		CertificateFile:           filepath.Join(sslDir, "certificate.crt"),
+		PEMFile:                   filepath.Join(sslDir, "certificate.pem"),
 		NginxDomainTail:           nginxDomainTail,
 		ValidityDays:              365,
 	}, nil
@@ -209,6 +211,12 @@ func createCertificate(config *Configuration) error {
 		config.ValidityDays, config.CSRFile, config.PrivateKeyFile, config.CertificateFile, config.OpenSSLConfigFile)
 	if err := helpers.RunCommand(cmd, false); err != nil {
 		return fmt.Errorf("failed to generate certificate: %w", err)
+	}
+
+	log.Println("Generating PEM file...")
+	cmd = fmt.Sprintf("openssl x509 -in %s -out %s -outform PEM", config.CertificateFile, config.PEMFile)
+	if err := helpers.RunCommand(cmd, false); err != nil {
+		return fmt.Errorf("failed to generate PEM file: %w", err)
 	}
 
 	return nil
