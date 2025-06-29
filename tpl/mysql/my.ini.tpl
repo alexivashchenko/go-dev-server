@@ -1,11 +1,11 @@
 [client]
 #password=your_password
 port=3306
-socket=/tmp/mysql.sock
+socket={root_folder}tmp/mysql.sock
 
 [mysqld]
 port=3306
-socket=/tmp/mysql.sock
+socket={root_folder}tmp/mysql.sock
 key_buffer_size=256M
 max_allowed_packet=512M
 table_open_cache=256
@@ -18,7 +18,12 @@ thread_cache_size=8
 secure-file-priv=""
 explicit_defaults_for_timestamp=1
 datadir="{root_folder}data/{mysql_data_folder}"
-default_authentication_plugin=mysql_native_password
+#default_authentication_plugin=mysql_native_password
+
+general_log=on
+general_log_file={root_folder}logs/mysql/general.log
+log_error={root_folder}logs/mysql/error.log
+
 
 
 [mysqldump]
