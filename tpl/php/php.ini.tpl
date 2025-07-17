@@ -1643,7 +1643,7 @@ curl.cainfo={PHP_CURL_CAINFO}
 ; OS-managed cert stores in its absence. If specified, this value may still
 ; be overridden on a per-stream basis via the "cafile" SSL stream context
 ; option.
-openssl.cafile={PHP_CURL_CAINFO}
+;openssl.cafile=
 ; If openssl.cafile is not specified or if the CA file is not found, the
 ; directory pointed to by openssl.capath is searched for a suitable
 ; certificate. This value must be a correctly hashed certificate directory.
