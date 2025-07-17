@@ -5,7 +5,6 @@ import (
 	"log"
 	"os"
 	"path/filepath"
-	"runtime"
 	"time"
 
 	"github.com/alexivashchenko/go-dev-server/helpers"
@@ -222,35 +221,17 @@ func createCertificate(config *Configuration) error {
 	return nil
 }
 
-// installCertificate installs the certificate in the system trust store
+// installCertificate installs the certificate in the Windows trust store
 func installCertificate(config *Configuration) error {
-	switch runtime.GOOS {
-	case "windows":
-		return installWindowsCertificate(config.CertificateFile)
-	case "darwin":
-		return installMacCertificate(config.CertificateFile)
-	case "linux":
-		return installLinuxCertificate(config.CertificateFile)
-	default:
-		return fmt.Errorf("unsupported operating system: %s", runtime.GOOS)
-	}
+	return installWindowsCertificate(config.CertificateFile)
 }
 
-// uninstallCertificate removes the certificate from the system trust store
+// uninstallCertificate removes the certificate from the Windows trust store
 func uninstallCertificate() error {
-	switch runtime.GOOS {
-	case "windows":
-		return uninstallWindowsCertificate()
-	case "darwin":
-		return uninstallMacCertificate()
-	case "linux":
-		return uninstallLinuxCertificate()
-	default:
-		return fmt.Errorf("unsupported operating system: %s", runtime.GOOS)
-	}
+	return uninstallWindowsCertificate()
 }
 
-// Windows-specific certificate installation
+// Certificate installation for Windows
 func installWindowsCertificate(certificateFile string) error {
 	log.Println("Installing certificate in Windows trust store...")
 	err := helpers.RunPowerShellAsAdmin(fmt.Sprintf(
@@ -262,7 +243,7 @@ func installWindowsCertificate(certificateFile string) error {
 	return nil
 }
 
-// Windows-specific certificate removal
+// Certificate removal for Windows
 func uninstallWindowsCertificate() error {
 	log.Println("Removing certificate from Windows trust store...")
 	err := helpers.RunPowerShellAsAdmin(
@@ -273,89 +254,7 @@ func uninstallWindowsCertificate() error {
 	return nil
 }
 
-// macOS-specific certificate installation
-func installMacCertificate(certificateFile string) error {
-	log.Println("Installing certificate in macOS trust store...")
-	// Add certificate to keychain
-	cmd := fmt.Sprintf("security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain %s", certificateFile)
-	if err := helpers.RunCommand(cmd, true); err != nil {
-		return fmt.Errorf("failed to install macOS certificate: %w", err)
-	}
-	return nil
-}
 
-// macOS-specific certificate removal
-func uninstallMacCertificate() error {
-	log.Println("Removing certificate from macOS trust store...")
-	// Find and remove certificate from keychain
-	cmd := "security find-certificate -a -c local_server -Z | grep SHA-1 | awk '{print $NF}' | xargs -I {} security delete-certificate -Z {}"
-	if err := helpers.RunCommand(cmd, true); err != nil {
-		return fmt.Errorf("failed to remove macOS certificate: %w", err)
-	}
-	return nil
-}
-
-// Linux-specific certificate installation
-func installLinuxCertificate(certificateFile string) error {
-	log.Println("Installing certificate in Linux trust store...")
-
-	// Detect distribution
-	if _, err := os.Stat("/etc/debian_version"); err == nil {
-		// Debian/Ubuntu
-		destPath := "/usr/local/share/ca-certificates/local_server.crt"
-		if err := helpers.CopyFile(certificateFile, destPath); err != nil {
-			return fmt.Errorf("failed to copy certificate: %w", err)
-		}
-
-		if err := helpers.RunCommand("update-ca-certificates", true); err != nil {
-			return fmt.Errorf("failed to update CA certificates: %w", err)
-		}
-	} else if _, err := os.Stat("/etc/redhat-release"); err == nil {
-		// RHEL/CentOS/Fedora
-		destPath := "/etc/pki/ca-trust/source/anchors/local_server.crt"
-		if err := helpers.CopyFile(certificateFile, destPath); err != nil {
-			return fmt.Errorf("failed to copy certificate: %w", err)
-		}
-
-		if err := helpers.RunCommand("update-ca-trust extract", true); err != nil {
-			return fmt.Errorf("failed to update CA certificates: %w", err)
-		}
-	} else {
-		return fmt.Errorf("unsupported Linux distribution")
-	}
-
-	return nil
-}
-
-// Linux-specific certificate removal
-func uninstallLinuxCertificate() error {
-	log.Println("Removing certificate from Linux trust store...")
-
-	// Detect distribution
-	if _, err := os.Stat("/etc/debian_version"); err == nil {
-		// Debian/Ubuntu
-		if err := os.Remove("/usr/local/share/ca-certificates/local_server.crt"); err != nil && !os.IsNotExist(err) {
-			return fmt.Errorf("failed to remove certificate: %w", err)
-		}
-
-		if err := helpers.RunCommand("update-ca-certificates --fresh", true); err != nil {
-			return fmt.Errorf("failed to update CA certificates: %w", err)
-		}
-	} else if _, err := os.Stat("/etc/redhat-release"); err == nil {
-		// RHEL/CentOS/Fedora
-		if err := os.Remove("/etc/pki/ca-trust/source/anchors/local_server.crt"); err != nil && !os.IsNotExist(err) {
-			return fmt.Errorf("failed to remove certificate: %w", err)
-		}
-
-		if err := helpers.RunCommand("update-ca-trust extract", true); err != nil {
-			return fmt.Errorf("failed to update CA certificates: %w", err)
-		}
-	} else {
-		return fmt.Errorf("unsupported Linux distribution")
-	}
-
-	return nil
-}
 
 // GetStatus returns the current status of the SSL configuration
 func GetStatus() string {
