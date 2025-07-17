@@ -20,4 +20,10 @@ keyUsage = digitalSignature, keyEncipherment
 extendedKeyUsage = serverAuth
 subjectAltName = @alt_names
 
+[v3_ca]
+subjectKeyIdentifier = hash
+authorityKeyIdentifier = keyid:always,issuer:always
+basicConstraints = CA:true
+keyUsage = digitalSignature, keyEncipherment, cRLSign, keyCertSign
+
 [alt_names]

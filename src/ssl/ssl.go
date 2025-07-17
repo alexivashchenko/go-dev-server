@@ -22,6 +22,9 @@ type Configuration struct {
 	CSRFile                   string
 	CertificateFile           string
 	PEMFile                   string
+	CAKeyFile                 string
+	CACertificateFile         string
+	CAPEMFile                 string
 	NginxDomainTail           string
 	ValidityDays              int
 }
@@ -52,6 +55,9 @@ func NewConfiguration() (*Configuration, error) {
 		CSRFile:                   filepath.Join(sslDir, "csr.csr"),
 		CertificateFile:           filepath.Join(sslDir, "certificate.crt"),
 		PEMFile:                   filepath.Join(sslDir, "certificate.pem"),
+		CAKeyFile:                 filepath.Join(sslDir, "ca.key"),
+		CACertificateFile:         filepath.Join(sslDir, "ca.crt"),
+		CAPEMFile:                 filepath.Join(sslDir, "ca.pem"),
 		NginxDomainTail:           nginxDomainTail,
 		ValidityDays:              365,
 	}, nil
@@ -179,8 +185,12 @@ func generateDNSEntries(config *Configuration) ([]string, error) {
 
 // shouldRegenerateCertificate checks if the certificate needs to be regenerated
 func shouldRegenerateCertificate(config *Configuration) (bool, error) {
-	// Check if certificate exists
+	// Check if certificates exist
 	if _, err := os.Stat(config.CertificateFile); os.IsNotExist(err) {
+		return true, nil
+	}
+
+	if _, err := os.Stat(config.CACertificateFile); os.IsNotExist(err) {
 		return true, nil
 	}
 
@@ -190,40 +200,76 @@ func shouldRegenerateCertificate(config *Configuration) (bool, error) {
 	return false, nil
 }
 
-// createCertificate generates a new SSL certificate
+// createCertificate generates a new SSL certificate and CA
 func createCertificate(config *Configuration) error {
-	log.Println("Generating private key...")
-	cmd := fmt.Sprintf("openssl genrsa -out %s 2048", config.PrivateKeyFile)
+	// Generate CA private key
+	log.Println("Generating CA private key...")
+	cmd := fmt.Sprintf("openssl genrsa -out %s 4096", config.CAKeyFile)
 	if err := helpers.RunCommand(cmd, false); err != nil {
-		return fmt.Errorf("failed to generate private key: %w", err)
+		return fmt.Errorf("failed to generate CA private key: %w", err)
 	}
 
-	log.Println("Generating certificate signing request...")
+	// Generate CA certificate
+	log.Println("Generating CA certificate...")
+	cmd = fmt.Sprintf("openssl req -x509 -new -nodes -key %s -sha256 -days %d -out %s -subj '/CN=Local Development CA' -extensions v3_ca -config %s",
+		config.CAKeyFile, config.ValidityDays, config.CACertificateFile, config.OpenSSLConfigFile)
+	if err := helpers.RunCommand(cmd, false); err != nil {
+		return fmt.Errorf("failed to generate CA certificate: %w", err)
+	}
+
+	// Generate CA PEM file
+	log.Println("Generating CA PEM file...")
+	cmd = fmt.Sprintf("openssl x509 -in %s -out %s -outform PEM", config.CACertificateFile, config.CAPEMFile)
+	if err := helpers.RunCommand(cmd, false); err != nil {
+		return fmt.Errorf("failed to generate CA PEM file: %w", err)
+	}
+
+	// Generate server private key
+	log.Println("Generating server private key...")
+	cmd = fmt.Sprintf("openssl genrsa -out %s 2048", config.PrivateKeyFile)
+	if err := helpers.RunCommand(cmd, false); err != nil {
+		return fmt.Errorf("failed to generate server private key: %w", err)
+	}
+
+	// Generate server certificate signing request
+	log.Println("Generating server certificate signing request...")
 	cmd = fmt.Sprintf("openssl req -new -key %s -out %s -config %s",
 		config.PrivateKeyFile, config.CSRFile, config.OpenSSLConfigFile)
 	if err := helpers.RunCommand(cmd, false); err != nil {
-		return fmt.Errorf("failed to generate CSR: %w", err)
+		return fmt.Errorf("failed to generate server CSR: %w", err)
 	}
 
-	log.Println("Generating self-signed certificate...")
-	cmd = fmt.Sprintf("openssl x509 -req -days %d -in %s -signkey %s -out %s -extensions v3_req -extfile %s",
-		config.ValidityDays, config.CSRFile, config.PrivateKeyFile, config.CertificateFile, config.OpenSSLConfigFile)
+	// Sign the server certificate with our CA
+	log.Println("Signing server certificate with CA...")
+	cmd = fmt.Sprintf("openssl x509 -req -days %d -in %s -CA %s -CAkey %s -CAcreateserial -out %s -extensions v3_req -extfile %s",
+		config.ValidityDays, config.CSRFile, config.CACertificateFile, config.CAKeyFile, config.CertificateFile, config.OpenSSLConfigFile)
 	if err := helpers.RunCommand(cmd, false); err != nil {
-		return fmt.Errorf("failed to generate certificate: %w", err)
+		return fmt.Errorf("failed to sign server certificate: %w", err)
 	}
 
-	log.Println("Generating PEM file...")
+	// Generate server PEM file
+	log.Println("Generating server PEM file...")
 	cmd = fmt.Sprintf("openssl x509 -in %s -out %s -outform PEM", config.CertificateFile, config.PEMFile)
 	if err := helpers.RunCommand(cmd, false); err != nil {
-		return fmt.Errorf("failed to generate PEM file: %w", err)
+		return fmt.Errorf("failed to generate server PEM file: %w", err)
 	}
 
 	return nil
 }
 
-// installCertificate installs the certificate in the Windows trust store
+// installCertificate installs the certificates in the Windows trust store
 func installCertificate(config *Configuration) error {
-	return installWindowsCertificate(config.CertificateFile)
+	// Install CA certificate first
+	if err := installWindowsCertificate(config.CACertificateFile); err != nil {
+		return fmt.Errorf("failed to install CA certificate: %w", err)
+	}
+
+	// Install server certificate
+	if err := installWindowsCertificate(config.CertificateFile); err != nil {
+		return fmt.Errorf("failed to install server certificate: %w", err)
+	}
+
+	return nil
 }
 
 // uninstallCertificate removes the certificate from the Windows trust store
@@ -245,16 +291,22 @@ func installWindowsCertificate(certificateFile string) error {
 
 // Certificate removal for Windows
 func uninstallWindowsCertificate() error {
-	log.Println("Removing certificate from Windows trust store...")
+	log.Println("Removing certificates from Windows trust store...")
+	// Remove server certificate
 	err := helpers.RunPowerShellAsAdmin(
 		"Get-ChildItem Cert:\\LocalMachine\\Root | Where-Object Subject -Like \"*local_server*\" | Remove-Item")
 	if err != nil {
-		return fmt.Errorf("failed to remove Windows certificate: %w", err)
+		return fmt.Errorf("failed to remove server certificate: %w", err)
+	}
+
+	// Remove CA certificate
+	err = helpers.RunPowerShellAsAdmin(
+		"Get-ChildItem Cert:\\LocalMachine\\Root | Where-Object Subject -Like \"*Local Development CA*\" | Remove-Item")
+	if err != nil {
+		return fmt.Errorf("failed to remove CA certificate: %w", err)
 	}
 	return nil
 }
-
-
 
 // GetStatus returns the current status of the SSL configuration
 func GetStatus() string {
